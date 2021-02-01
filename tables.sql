@@ -23,6 +23,7 @@ create table validators
     exitepoch                  bigint      not null,
     lastattestationslot        bigint,
     status                     varchar(20) not null default '',
+    lidoOperator               varchar(20) not null default '',
     primary key (validatorindex)
 );
 create index idx_validators_pubkey on validators (pubkey);
