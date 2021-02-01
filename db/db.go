@@ -30,7 +30,7 @@ var DB *sqlx.DB
 var logger = logrus.New().WithField("module", "db")
 
 func mustInitDB(username, password, host, port, name string) *sqlx.DB {
-	dbConn, err := sqlx.Open("pgx", fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, name))
+	dbConn, err := sqlx.Open("pgx", fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=required", username, password, host, port, name))
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func GetEth1Deposits(address string, length, start uint64) ([]*types.EthOneDepos
 	deposits := []*types.EthOneDepositsData{}
 
 	err := DB.Select(&deposits, `
-	SELECT 
+	SELECT
 		tx_hash,
 		tx_input,
 		tx_index,
@@ -74,7 +74,7 @@ func GetEth1Deposits(address string, length, start uint64) ([]*types.EthOneDepos
 		amount,
 		signature,
 		merkletree_index
-	FROM 
+	FROM
 		eth1_deposits
 	ORDER BY block_ts DESC
 	LIMIT $1
@@ -108,7 +108,7 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 	if query != "" {
 		err = DB.Get(&totalCount, `
 			SELECT COUNT(*) FROM eth1_deposits as eth1
-			WHERE 
+			WHERE
 				ENCODE(eth1.publickey::bytea, 'hex') LIKE LOWER($1)
 				OR ENCODE(eth1.withdrawal_credentials::bytea, 'hex') LIKE LOWER($1)
 				OR ENCODE(eth1.from_address::bytea, 'hex') LIKE LOWER($1)
@@ -123,7 +123,7 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 
 	if query != "" {
 		err = DB.Select(&deposits, fmt.Sprintf(`
-		SELECT 
+		SELECT
 			eth1.tx_hash as tx_hash,
 			eth1.tx_input as tx_input,
 			eth1.tx_index as tx_index,
@@ -142,7 +142,7 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 		LEFT JOIN
 			(
 				SELECT pubkey,
-				CASE 
+				CASE
 					WHEN exitepoch <= $3 then 'exited'
 					WHEN activationepoch > $3 then 'pending'
 					WHEN slashed and activationepoch < $3 and (lastattestationslot < $4 OR lastattestationslot is null) then 'slashing_offline'
@@ -165,7 +165,7 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 		OFFSET $2`, orderBy, orderDir), length, start, latestEpoch, validatorOnlineThresholdSlot, query+"%")
 	} else {
 		err = DB.Select(&deposits, fmt.Sprintf(`
-		SELECT 
+		SELECT
 			eth1.tx_hash as tx_hash,
 			eth1.tx_input as tx_input,
 			eth1.tx_index as tx_index,
@@ -184,7 +184,7 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 			LEFT JOIN
 			(
 				SELECT pubkey,
-				CASE 
+				CASE
 					WHEN exitepoch <= $3 then 'exited'
 					WHEN activationepoch > $3 then 'pending'
 					WHEN slashed and activationepoch < $3 and (lastattestationslot < $4 OR lastattestationslot is null) then 'slashing_offline'
@@ -210,9 +210,9 @@ func GetEth1DepositsJoinEth2Deposits(query string, length, start uint64, orderBy
 func GetEth1DepositsCount() (uint64, error) {
 	deposits := uint64(0)
 	err := DB.Get(&deposits, `
-	SELECT 
+	SELECT
 		Count(*)
-	FROM 
+	FROM
 		eth1_deposits
 	`)
 	if err != nil {
@@ -273,7 +273,7 @@ func GetEth1DepositsLeaderboard(query string, length, start uint64, orderBy, ord
 	}
 
 	err = DB.Select(&deposits, fmt.Sprintf(`
-		SELECT 
+		SELECT
 			from_address,
 			SUM(amount) as amount,
 			COUNT(CASE WHEN valid_signature = 't' THEN 1 END) as validcount,
@@ -287,7 +287,7 @@ func GetEth1DepositsLeaderboard(query string, length, start uint64, orderBy, ord
 			eth1_deposits as eth1
 		LEFT JOIN
 			(
-				SELECT 
+				SELECT
 					pubkey,
 					slashed,
 					exitepoch,
@@ -328,7 +328,7 @@ func GetEth2Deposits(query string, length, start uint64, orderBy, orderDir strin
 
 	if query != "" {
 		err := DB.Select(&deposits, fmt.Sprintf(`
-			SELECT 
+			SELECT
 				blocks_deposits.block_slot,
 				blocks_deposits.block_index,
 				blocks_deposits.proof,
@@ -346,7 +346,7 @@ func GetEth2Deposits(query string, length, start uint64, orderBy, orderDir strin
 		}
 	} else {
 		err := DB.Select(&deposits, fmt.Sprintf(`
-			SELECT 
+			SELECT
 				blocks_deposits.block_slot,
 				blocks_deposits.block_index,
 				blocks_deposits.proof,
@@ -370,9 +370,9 @@ func GetEth2DepositsCount() (uint64, error) {
 	deposits := uint64(0)
 
 	err := DB.Get(&deposits, `
-	SELECT 
+	SELECT
 		Count(*)
-	FROM 
+	FROM
 		blocks_deposits
 	`)
 	if err != nil {
@@ -386,15 +386,15 @@ func GetSlashingCount() (uint64, error) {
 
 	err := DB.Get(&slashings, `
 		SELECT SUM(count)
-		FROM 
+		FROM
 		(
-			SELECT COUNT(*) 
-			FROM 
-				blocks_attesterslashings 
+			SELECT COUNT(*)
+			FROM
+				blocks_attesterslashings
 				INNER JOIN blocks on blocks.slot = blocks_attesterslashings.block_slot and blocks.status = '1'
-			UNION 
-			SELECT COUNT(*) 
-			FROM 
+			UNION
+			SELECT COUNT(*)
+			FROM
 				blocks_proposerslashings
 				INNER JOIN blocks on blocks.slot = blocks_proposerslashings.block_slot and blocks.status = '1'
 		) as tbl`)
@@ -522,7 +522,7 @@ func SaveValidatorQueue(validators *types.ValidatorQueue) error {
 		INSERT INTO queue (ts, entering_validators_count, exiting_validators_count)
 		VALUES (date_trunc('hour', now()), $1, $2)
 		ON CONFLICT (ts) DO UPDATE SET
-			entering_validators_count = excluded.entering_validators_count, 
+			entering_validators_count = excluded.entering_validators_count,
 			exiting_validators_count = excluded.exiting_validators_count`,
 		enteringValidatorsCount, exitingValidatorsCount)
 	return err
@@ -629,24 +629,24 @@ func SaveEpoch(data *types.EpochData) error {
 
 	_, err = tx.Exec(`
 		INSERT INTO epochs (
-			epoch, 
-			blockscount, 
-			proposerslashingscount, 
-			attesterslashingscount, 
-			attestationscount, 
-			depositscount, 
-			voluntaryexitscount, 
-			validatorscount, 
-			averagevalidatorbalance, 
+			epoch,
+			blockscount,
+			proposerslashingscount,
+			attesterslashingscount,
+			attestationscount,
+			depositscount,
+			voluntaryexitscount,
+			validatorscount,
+			averagevalidatorbalance,
 			totalvalidatorbalance,
-			finalized, 
-			eligibleether, 
-			globalparticipationrate, 
+			finalized,
+			eligibleether,
+			globalparticipationrate,
 			votedether
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
-		ON CONFLICT (epoch) DO UPDATE SET 
-			blockscount             = excluded.blockscount, 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (epoch) DO UPDATE SET
+			blockscount             = excluded.blockscount,
 			proposerslashingscount  = excluded.proposerslashingscount,
 			attesterslashingscount  = excluded.attesterslashingscount,
 			attestationscount       = excluded.attestationscount,
@@ -829,9 +829,9 @@ func saveValidators(epoch uint64, validators []*types.Validator, tx *sql.Tx) err
 			balance1d,
 			balance7d,
 			balance31d
-		) 
+		)
 		VALUES %s
-		ON CONFLICT (validatorindex) DO UPDATE SET 
+		ON CONFLICT (validatorindex) DO UPDATE SET
 			pubkey                     = EXCLUDED.pubkey,
 			withdrawableepoch          = EXCLUDED.withdrawableepoch,
 			withdrawalcredentials      = EXCLUDED.withdrawalcredentials,
@@ -865,7 +865,7 @@ func saveValidators(epoch uint64, validators []*types.Validator, tx *sql.Tx) err
 	}
 
 	s := time.Now()
-	_, err = tx.Exec(`UPDATE validators SET status = CASE 
+	_, err = tx.Exec(`UPDATE validators SET status = CASE
 				WHEN exitepoch <= $1 and slashed then 'slashed'
 				WHEN exitepoch <= $1 then 'exited'
 				WHEN activationeligibilityepoch = 9223372036854775807 then 'deposited'
@@ -874,7 +874,7 @@ func saveValidators(epoch uint64, validators []*types.Validator, tx *sql.Tx) err
 				WHEN slashed then 'slashing_online'
 				WHEN exitepoch < 9223372036854775807 and (lastattestationslot < $2 OR lastattestationslot is null) then 'exiting_offline'
 				WHEN exitepoch < 9223372036854775807 then 'exiting_online'
-				WHEN activationepoch < $1 and (lastattestationslot < $2 OR lastattestationslot is null) then 'active_offline' 
+				WHEN activationepoch < $1 and (lastattestationslot < $2 OR lastattestationslot is null) then 'active_offline'
 				ELSE 'active_online'
 			END`, latestBlock/32, thresholdSlot)
 	if err != nil {
@@ -1075,7 +1075,7 @@ func saveBlocks(blocks map[uint64]map[string]*types.Block, tx *sql.Tx) error {
 
 	stmtDeposits, err := tx.Prepare(`
 		INSERT INTO blocks_deposits (block_slot, block_index, proof, publickey, withdrawalcredentials, amount, signature)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (block_slot, block_index) DO NOTHING`)
 	if err != nil {
 		return err
@@ -1322,8 +1322,8 @@ func GetActiveValidatorCount() (uint64, error) {
 
 func GetValidatorNames() (map[uint64]string, error) {
 	rows, err := DB.Query(`
-		SELECT validatorindex, validator_names.name 
-		FROM validators 
+		SELECT validatorindex, validator_names.name
+		FROM validators
 		LEFT JOIN validator_names ON validators.pubkey = validator_names.publickey
 		WHERE validator_names.name IS NOT NULL`)
 
